@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Definitive TCP/IP Visualizer - Final Submission</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg-dark: #0f0c29;
+    --text-light: #e0e0e0;
+    --text-accent: #a78bfa;
+    --container-bg: rgba(36,36,62,0.5);
+    --glow-color: rgba(167, 139, 250, 0.7);
+    --glow-shadow: 0 0 20px 4px var(--glow-color);
+    --border-color: rgba(255, 255, 255, 0.15);
+  }
+  @keyframes aurora-bg {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes content-fade-in {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #1a1a2e);
+    background-size: 400% 400%;
+    animation: aurora-bg 20s ease infinite;
+    color: var(--text-light);
+    margin: 0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .main-container {
+    max-width: 1200px;
+    margin: auto;
+    animation: content-fade-in 0.8s ease-out;
+  }
+  h1 {
+    text-align: center; font-size: 2.1rem; color: white; margin-bottom: 24px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px; padding: 18px 0;
+    box-shadow: 0 8px 30px #667eea99; letter-spacing: 2px;
+  }
+  #network-container {
+    border-radius: 18px; background: var(--container-bg);
+    box-shadow: 0 18px 40px #0009, inset 0 0 1.5px 1px rgba(255,255,255,0.05);
+    backdrop-filter: blur(15px);
+    overflow: hidden; display: flex; flex-direction: column;
+    border: 1px solid var(--border-color);
+  }
+  .simulation-area {
+    display: flex; justify-content: space-between; gap: 32px;
+    padding: 28px; position: relative; min-height: 320px;
+  }
+  .side { flex: 1; }
+  .side h2 { color: var(--text-accent); font-size: 21px; text-align:center; margin-bottom:14px; text-shadow: var(--glow-shadow); }
+  .layer {
+    margin: 12px 20px; padding: 10px 16px; border-radius: 11px;
+    color: #e3e3e3; font-weight: 600; font-size: 16px;
+    box-shadow: 0 2px 13px #0005; border: 1.5px solid transparent;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+  .layer:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 20px #0008, 0 0 15px var(--glow-color);
+    border-color: var(--glow-color);
+  }
+  .application { background: linear-gradient(90deg, #f093fb, #f5576c); }
+  .transport   { background: linear-gradient(90deg, #ffecd2, #fcb69f); color: #333!important; }
+  .network     { background: linear-gradient(90deg, #4facfe, #00f2fe); }
+  .datalink    { background: linear-gradient(90deg, #43e97b, #38f9d7); }
+  .physical    { background: linear-gradient(90deg, #fa709a, #fee140); }
+  
+  .highlight { 
+    box-shadow: 0 0 25px 3px #ffeb3b !important;
+    transform: scale(1.08); 
+    border: 2.5px solid #ffeb3b !important;
+  }
+
+  #packet {
+    position: absolute; min-width: 60px; height: 40px; border-radius: 10px;
+    top: 52px; z-index: 10;
+    background: linear-gradient(135deg, #f857a6, #ff5858);
+    color: #fff; font-size: 14px; display: flex;
+    align-items: center; justify-content: center;
+    font-weight: 700; box-shadow: 0 6px 23px #f857a6aa;
+    border: 2px solid #fff2;
+    transition: left 1.2s cubic-bezier(0.65, 0, 0.35, 1), top 1.2s cubic-bezier(0.65, 0, 0.35, 1);
+    font-family: 'Courier New', monospace; padding: 0 8px; white-space: nowrap;
+    transform: translateX(-50%);
+  }
+
+  #unified-info-block {
+    padding: 20px 28px; background: rgba(0,0,0,0.2);
+    border-top: 1px solid var(--border-color);
+    min-height: 150px;
+  }
+  #info-layer-title, #info-layer-details, #info-packet-structure { transition: opacity 0.4s ease, transform 0.4s ease; }
+  .is-updating > * { opacity: 0; transform: translateY(10px); }
+  #info-layer-title { font-size:21px; color:var(--text-accent); font-weight:600; margin-bottom:7px;}
+  #info-layer-details {margin-bottom:11px; line-height: 1.6;}
+  #info-layer-details strong { color: #43e97b; }
+  #info-packet-structure {margin-top:10px; font-weight: 600;}
+  .packet-part { display:inline-block; margin:0 2px; padding:5px 8px; border-radius:6px; font-family:'Courier New', monospace; font-size:15px; animation: content-fade-in 0.5s ease;}
+  .p-data      { background: #f5576c; color: #fff; }
+  .p-tcp       { background: #fcb69f; color: #333; }
+  .p-ip        { background: #4facfe; color: #fff;}
+  .p-mac       { background: #43e97b; color: #222;}
+  .p-trailer   { background: #38f9d7; opacity:0.8; color: #333;}
+  
+  .progress-bar-container {
+    padding: 0 28px 15px;
+    background: rgba(0,0,0,0.2);
+  }
+  #progress-bar {
+    width: 0%; height: 6px;
+    background: linear-gradient(90deg, var(--text-accent), #43e97b);
+    border-radius: 3px;
+    transition: width 1.5s cubic-bezier(.6,0,.4,1);
+    box-shadow: 0 0 15px var(--text-accent);
+  }
+
+  .controls-wrapper { display: flex; justify-content: center; gap: 15px; margin: 24px 0; flex-wrap: wrap; }
+  button {
+    padding: 12px 30px; font-size: 15px; color: white;
+    border: none; border-radius: 50px; font-weight:600;
+    cursor: pointer; transition: all .2s;
+    box-shadow: 0 6px 16px #667eea93; margin-bottom:7px;
+  }
+  #info-btn { background: linear-gradient(135deg, #4facfe, #00f2fe); box-shadow: 0 6px 16px #4facfe93;}
+  .main-controls button { background: linear-gradient(135deg, #667eea, #764ba2); }
+  button:disabled { background: #3b396b; cursor: not-allowed; box-shadow: none; transform: none !important; }
+  button:not(:disabled):hover { transform: translateY(-3px) scale(1.07);}
+  button:not(:disabled):active { transform: translateY(-1px) scale(1.02); }
+  
+  footer {margin-top: 24px; color: #ccc; text-align:center;}
+
+  /* Modal Styles */
+  .modal {
+    display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%;
+    overflow: auto; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+    animation: fadeIn 0.5s;
+  }
+  .modal-content {
+    background: linear-gradient(160deg, #1e1c42, #3c377c); margin: 8% auto; padding: 30px;
+    border: 1px solid var(--border-color); width: 85%; max-width: 700px; border-radius: 15px;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.5); animation: content-fade-in 0.5s;
+  }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .modal-header h2 { color: var(--text-accent); }
+  .close-btn { color: #aaa; font-size: 32px; font-weight: bold; cursor: pointer; transition: color 0.3s ease; }
+  .close-btn:hover { color: white; }
+  .modal-controls { margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+  .modal-controls select, .modal-controls button {
+      padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.3); color: white;
+  }
+  .modal-controls button { cursor: pointer; background: #667eea; border: none; }
+  #layer-info-display { background: rgba(0,0,0,0.2); padding: 20px; border-radius: 10px; line-height: 1.7; min-height: 200px; }
+  #layer-info-display h3 { color: var(--text-accent); margin-bottom: 10px; }
+  #layer-info-display ul { list-style-position: inside; padding-left: 10px; }
+  #layer-info-display li { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="main-container">
+  <h1>Definitive TCP/IP Visualizer</h1>
+  <div id="network-container">
+    <div class="simulation-area">
+      <div id="packet"></div>
+      <div class="side" id="sender">
+        <h2>📤 Sender</h2>
+        <div class="layer application" id="appS">📱 Application</div>
+        <div class="layer transport" id="transS">🚚 Transport</div>
+        <div class="layer network" id="netS">🌍 Network</div>
+        <div class="layer datalink" id="linkS">🔗 Data Link</div>
+        <div class="layer physical" id="phyS">⚡ Physical</div>
+      </div>
+      <div class="side" id="receiver">
+        <h2>📥 Receiver</h2>
+        <div class="layer application" id="appR">📱 Application</div>
+        <div class="layer transport" id="transR">🚚 Transport</div>
+        <div class="layer network" id="netR">🌍 Network</div>
+        <div class="layer datalink" id="linkR">🔗 Data Link</div>
+        <div class="layer physical" id="phyR">⚡ Physical</div>
+      </div>
+    </div>
+    <div id="unified-info-block">
+      <div id="info-layer-title">Welcome!</div>
+      <div id="info-layer-details">Choose a simulation mode. <b>Auto Play</b> runs the full animation, and <b>Step-by-Step</b> gives you manual control.</div>
+      <div id="info-packet-structure">Awaiting simulation...</div>
+    </div>
+    <div class="progress-bar-container">
+        <div id="progress-bar"></div>
+    </div>
+  </div>
+
+  <div class="controls-wrapper">
+    <div class="main-controls">
+        <button id="auto-play-btn" title="Start the full simulation automatically">▶️ Auto Play</button>
+        <button id="step-btn" title="Manually control each step of the simulation (Spacebar)">⏯️ Step-by-Step</button>
+        <button id="reset-btn" title="Reset the simulation (R)" disabled>🔄 Reset</button>
+    </div>
+    <button id="info-btn" title="Get detailed information about any layer">ℹ️ Layer Info</button>
+  </div>
+  
+  <footer><p>Final Version by Gemini | Original Open Source Project</p></footer>
+  
+  <div id="infoModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Layer Deep Dive</h2>
+            <span id="close-modal-btn" class="close-btn">&times;</span>
+        </div>
+        <div class="modal-controls">
+            <select id="layerSelect">
+                <option value="application">Application Layer</option>
+                <option value="transport">Transport Layer</option>
+                <option value="network">Network Layer</option>
+                <option value="datalink">Data Link Layer</option>
+                <option value="physical">Physical Layer</option>
+            </select>
+            <select id="sideSelect">
+                <option value="sender">Sender (Encapsulation)</option>
+                <option value="receiver">Receiver (Decapsulation)</option>
+            </select>
+            <button id="showInfoBtn">Show Info</button>
+        </div>
+        <div id="layer-info-display"><p>Select a layer and side to see full details here.</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  // --- DOM Elements ---
+  const DOM = {
+    packet: document.getElementById('packet'),
+    autoBtn: document.getElementById('auto-play-btn'),
+    stepBtn: document.getElementById('step-btn'),
+    resetBtn: document.getElementById('reset-btn'),
+    infoBtn: document.getElementById('info-btn'),
+    allLayers: document.querySelectorAll('.layer'),
+    infoBlock: document.getElementById('unified-info-block'),
+    infoTitle: document.getElementById('info-layer-title'),
+    infoDetails: document.getElementById('info-layer-details'),
+    infoPacket: document.getElementById('info-packet-structure'),
+    simArea: document.querySelector('.simulation-area'),
+    progressBar: document.getElementById('progress-bar'),
+    modal: document.getElementById('infoModal'),
+    closeModalBtn: document.getElementById('close-modal-btn'),
+    layerSelect: document.getElementById('layerSelect'),
+    sideSelect: document.getElementById('sideSelect'),
+    showInfoBtn: document.getElementById('showInfoBtn'),
+    layerInfoDisplay: document.getElementById('layer-info-display')
+  };
+  
+  // --- State Management ---
+  let state = { isRunning:false, currentStep:-1, mode:null, timeoutId:null, userData:'' };
+
+  // --- Data for Live Simulation ---
+  const layerData = {
+    'appS': { name: 'Application Layer (Sender)', description: d => `The process begins. An application creates data to be sent: "<strong>${d}</strong>". This raw data is passed to the Transport Layer.`, getPacketHTML: d => `<span class="packet-part p-data">${d}</span>`},
+    'transS': {name:'Transport Layer (Sender)', description:()=>`The Transport Layer adds a <strong>TCP header</strong> with port numbers. This new unit is a <strong>Segment</strong>.`,getPacketHTML:d=>`<span class="packet-part p-tcp">TCP(P:443)</span><span class="packet-part p-data">${d}</span>`},
+    'netS': {name:'Network Layer (Sender)', description:()=>`An <strong>IP header</strong> is added with IP addresses. The Segment is now a <strong>Packet</strong>.`,getPacketHTML:d=>`<span class="packet-part p-ip">IP(8.8.8.8)</span><span class="packet-part p-tcp">TCP(P:443)</span><span class="packet-part p-data">${d}</span>`},
+    'linkS': {name:'Data Link Layer (Sender)', description:()=>`The Packet is wrapped in a <strong>Frame</strong>. A <strong>MAC header</strong> and a <strong>Trailer</strong> are added.`,getPacketHTML:d=>`<span class="packet-part p-mac">MAC(AA:BB)</span><span class="packet-part p-ip">IP(8.8.8.8)</span><span class="packet-part p-tcp">TCP(P:443)</span><span class="packet-part p-data">${d}</span><span class="packet-part p-trailer">Trailer</span>`},
+    'phyS': {name:'Physical Layer (Sender)', description:()=>`The Frame is converted into a stream of <strong>bits</strong> and encoded into a physical signal.`, getPacketHTML:()=>`<span class="packet-part">01101001 101101...</span>`},
+    'transmission':{name:'Transmission Medium',description:()=>`The physical signals travel across the network medium, from the sender to the receiver.`,getPacketHTML:()=>`<span class="packet-part">Physical Signals</span>`},
+    'phyR':{name:'Physical Layer (Receiver)', description:()=>`The receiver's network card detects the signals and decodes them back into <strong>bits</strong>, reassembling the <strong>Frame</strong>.`,getPacketHTML:d=>layerData['linkS'].getPacketHTML(d)},
+    'linkR':{name:'Data Link Layer (Receiver)',description:()=>`The Data Link Layer checks the <strong>Trailer</strong> for errors. The header and trailer are stripped off to get the <strong>Packet</strong>.`,getPacketHTML:d=>layerData['netS'].getPacketHTML(d)},
+    'netR':{name:'Network Layer (Receiver)', description:()=>`The <strong>IP header</strong> is read. The header is removed to get the <strong>Segment</strong>.`,getPacketHTML:d=>layerData['transS'].getPacketHTML(d)},
+    'transR':{name:'Transport Layer (Receiver)',description:()=>`The <strong>TCP header</strong> is read to direct the data to the correct application. The header is stripped off.`,getPacketHTML:d=>layerData['appS'].getPacketHTML(d)},
+    'appR':{name:'Application Layer (Receiver)',description:d=>`The original data, "<strong>${d}</strong>", is passed to the destination application. The process is complete.`,getPacketHTML:d=>layerData['appS'].getPacketHTML(d)}
+  };
+  const sequence = ['appS','transS','netS','linkS','phyS','transmission','phyR','linkR','netR','transR','appR'];
+
+  // --- VERY DETAILED Data for Info Modal ---
+  const encyclopedicLayerInfo = {
+    application: {
+        sender: "<h3>📱 Application (Sender Role)</h3><p>This is the highest layer and the starting point of all communication. It's not the application itself (like Chrome or Outlook), but the set of protocols that applications use to communicate over the network.</p><ul><li><strong>Purpose:</strong> To provide network services directly to user applications.</li><li><strong>Encapsulation Process:</strong> A user action (like clicking a link) generates a request. The application layer protocol (e.g., HTTP) formats this request into a message, which becomes the initial data payload. This data is then handed down to the transport layer.</li><li><strong>Example:</strong> You type `google.com`. Your browser creates an `HTTP GET` request. This request is the raw data.</li></ul>",
+        receiver: "<h3>📱 Application (Receiver Role)</h3><p>This is the final destination for the data. The lower layers hand the fully reassembled data up to this layer.</p><ul><li><strong>Purpose:</strong> To interpret the received data and present it to the user through an application.</li><li><strong>Decapsulation Process:</strong> This layer receives the pure data (e.g., HTML, CSS, image files) from the transport layer. The server application (e.g., Apache, Nginx) processes this data and performs the necessary actions.</li><li><strong>Example:</strong> The web server receives the `HTTP GET` request and responds by sending back the `index.html` file for that website.</li></ul>"
+    },
+    transport: {
+        sender: "<h3>🚚 Transport (Sender Role)</h3><p>This layer's main job is to manage the conversation between two applications on different computers. It's like a postal service for applications.</p><ul><li><strong>Purpose:</strong> To provide reliable (or unreliable) data transfer, segmenting large data and adding port numbers.</li><li><strong>Encapsulation Process:</strong> It takes the data from the Application Layer and breaks it into smaller, manageable chunks. It then adds a header to each chunk, creating a <strong>Segment</strong>. This TCP header contains:<ul><li><strong>Source Port:</strong> A high, random port number from the sending computer.</li><li><strong>Destination Port:</strong> The specific port of the service being requested (e.g., 443 for HTTPS, 80 for HTTP).</li><li><strong>Sequence Number:</strong> To track each segment and reassemble them in the correct order at the destination.</li></ul></li></ul>",
+        receiver: "<h3>🚚 Transport (Receiver Role)</h3><p>This layer acts as a manager, reassembling the data and ensuring everything arrived correctly.</p><ul><li><strong>Purpose:</strong> To reassemble segments, handle error checking, and pass the data to the correct application.</li><li><strong>Decapsulation Process:</strong> It reads the TCP header of incoming segments. It uses the sequence numbers to put the data chunks back in the correct order. It also checks for errors and may request retransmission of lost segments. Once the data is perfectly reassembled, it uses the destination port number to deliver it to the correct application (e.g., data for port 443 goes to the web server process).</li></ul>"
+    },
+    network: {
+        sender: "<h3>🌍 Network (Sender Role)</h3><p>This layer is the 'GPS' of the internet. It's responsible for finding the best path for data to travel from the source network to the destination network.</p><ul><li><strong>Purpose:</strong> Logical addressing and routing of data across multiple networks.</li><li><strong>Encapsulation Process:</strong> It takes the Segment from the Transport Layer and adds an IP (Internet Protocol) header, creating a <strong>Packet</strong>. The IP header contains:<ul><li><strong>Source IP Address:</strong> The unique global address of the sending computer.</li><li><strong>Destination IP Address:</strong> The unique global address of the receiving computer.</li></ul></li></ul>",
+        receiver: "<h3>🌍 Network (Receiver Role)</h3><p>This layer acts as a mail sorter for a specific computer.</p><ul><li><strong>Purpose:</strong> To identify if a packet is meant for this specific computer.</li><li><strong>Decapsulation Process:</strong> It examines the IP header of every incoming packet. If the destination IP address matches its own, it accepts the packet. It then strips off the IP header and passes the remaining content (the Segment) up to the Transport Layer.</li></ul>"
+    },
+    datalink: {
+        sender: "<h3>🔗 Data Link (Sender Role)</h3><p>This layer handles the 'local' part of the journey. It's responsible for getting the data from one device to the very next device on the same local network (e.g., from your computer to your Wi-Fi router).</p><ul><li><strong>Purpose:</strong> To handle physical addressing and error detection for a single hop.</li><li><strong>Encapsulation Process:</strong> It takes the IP Packet and wraps it in a <strong>Frame</strong>. It adds a MAC header and a trailer:<ul><li><strong>MAC Header:</strong> Contains the source and destination MAC addresses (the unique hardware ID of a network card). The destination is the MAC of the next hop, like a router.</li><li><strong>Trailer (CRC):</strong> A checksum for error detection.</li></ul></li></ul>",
+        receiver: "<h3>🔗 Data Link (Receiver Role)</h3><p>This layer is the gatekeeper for the local network connection.</p><ul><li><strong>Purpose:</strong> To check for transmission errors and verify the physical address.</li><li><strong>Decapsulation Process:</strong> It receives the Frame. It first checks the destination MAC address. If it matches, it then calculates a checksum on the frame and compares it to the CRC in the trailer. If they match (no errors), it strips off the MAC header and trailer and passes the clean IP Packet up to the Network Layer.</li></ul>"
+    },
+    physical: {
+        sender: "<h3>⚡ Physical (Sender Role)</h3><p>This is the lowest layer, where data becomes a physical phenomenon. It deals with the hardware that connects everything.</p><ul><li><strong>Purpose:</strong> To convert the digital bits of the Frame into physical signals suitable for the transmission medium.</li><li><strong>Process:</strong> It takes the 1s and 0s of the Frame and converts them into:<ul><li><strong>Electrical voltages</strong> for Ethernet cables.</li><li><strong>Pulses of light</strong> for fiber optic cables.</li><li><strong>Radio waves</strong> for Wi-Fi.</li></ul></li></ul>",
+        receiver: "<h3>⚡ Physical (Receiver Role)</h3><p>This layer's job is to 'listen' to the wire or air and convert physical phenomena back into data.</p><ul><li><strong>Purpose:</strong> To receive physical signals and convert them back into digital bits.</li><li><strong>Process:</strong> The network interface card (NIC) on the receiving end detects the incoming signals. It translates these voltages, light pulses, or radio waves back into a stream of 1s and 0s. These bits are then grouped together to reassemble the Frame, which is then passed up to the Data Link Layer.</li></ul>"
+    }
+  };
+  
+  // --- Core Simulation Functions ---
+  function startSim(mode){
+    if(state.isRunning) return;
+    const d = prompt("Enter data to send:", "Hello, World!");
+    if(!d) return;
+    state.userData = d.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    state.isRunning = true; state.currentStep = -1; state.mode = mode;
+    updateBtnState();
+    nextStep();
+  }
+  
+  function nextStep(){
+    if(state.mode === 'step') DOM.stepBtn.disabled=true;
+    state.currentStep++;
+    DOM.progressBar.style.width = `${(state.currentStep / (sequence.length - 1)) * 100}%`;
+    if(state.currentStep >= sequence.length){
+      finishSim();
+      return;
+    }
+    updateUnifiedInfo(sequence[state.currentStep], state.userData);
+    if(state.mode === 'auto'){
+      state.timeoutId = setTimeout(nextStep, 1700);
+    } else { 
+      setTimeout(updateBtnState, 420);
+    }
+  }
+  
+  function finishSim(){
+    DOM.infoTitle.innerText='✅ Success!';
+    DOM.infoDetails.innerHTML='Data has been successfully delivered. Click <b>Reset</b> to start a new simulation.';
+    DOM.infoPacket.innerHTML='';
+    DOM.allLayers.forEach(l=>l.classList.remove('highlight'));
+    state.isRunning=false;
+    updateBtnState();
+  }
+  
+  function resetSim(){
+    clearTimeout(state.timeoutId); 
+    state.isRunning=false; state.currentStep=-1; state.mode=null;
+    DOM.infoTitle.innerText='Welcome!';
+    DOM.infoDetails.innerHTML='Choose a simulation mode. <b>Auto Play</b> runs the full animation, and <b>Step-by-Step</b> gives you manual control.';
+    DOM.infoPacket.innerHTML='Awaiting simulation...';
+    DOM.allLayers.forEach(l=>l.classList.remove('highlight'));
+    
+    const initialPos = getLayerPosition('appS');
+    DOM.packet.style.transition = 'none';
+    DOM.packet.style.left = initialPos.left;
+    DOM.packet.style.top = initialPos.top;
+    DOM.packet.style.transform = 'translateX(-50%)';
+    DOM.packet.innerHTML = '';
+    setTimeout(() => {
+        DOM.packet.style.transition = 'left 1.2s cubic-bezier(0.65, 0, 0.35, 1), top 1.2s cubic-bezier(0.65, 0, 0.35, 1)';
+    }, 50);
+
+    DOM.progressBar.style.width = '0%';
+    updateBtnState();
+  }
+
+  function updateUnifiedInfo(layerKey, userData){
+    DOM.infoBlock.classList.add('is-updating');
+    const currentLayer = layerData[layerKey];
+    const packetHTML = currentLayer.getPacketHTML(userData);
+
+    DOM.packet.innerHTML = packetHTML;
+    
+    // Use a special handler for the two-part transmission animation
+    if (layerKey === 'transmission') {
+        handleTransmissionAnimation();
+    } else {
+        requestAnimationFrame(() => {
+            const pos = getLayerPosition(layerKey);
+            DOM.packet.style.left = pos.left;
+            DOM.packet.style.top = pos.top;
+        });
+    }
+
+    setTimeout(() => {
+        DOM.infoTitle.innerText = currentLayer.name;
+        DOM.infoDetails.innerHTML = currentLayer.description(userData);
+        DOM.infoPacket.innerHTML = `<strong>Packet Structure:</strong> ${packetHTML}`;
+        DOM.infoBlock.classList.remove('is-updating');
+    }, 300);
+
+    DOM.allLayers.forEach(l=>l.classList.remove('highlight'));
+    const el = document.getElementById(layerKey) || document.getElementById('phyS'); // Highlight phyS as start of transmission
+    if(el) el.classList.add('highlight');
+  }
+  
+  function handleTransmissionAnimation() {
+    const startPos = getLayerPosition('phyS');
+    const midPos = getLayerPosition('transmission');
+    const endPos = getLayerPosition('phyR');
+
+    // Go to start pos (phyS) instantly, then start animation
+    DOM.packet.style.transition = 'none';
+    DOM.packet.style.left = startPos.left;
+    DOM.packet.style.top = startPos.top;
+    
+    setTimeout(() => {
+        DOM.packet.style.transition = 'left 0.8s ease-in-out, top 0.8s ease-in-out';
+        DOM.packet.style.left = midPos.left;
+        DOM.packet.style.top = midPos.top;
+
+        setTimeout(() => {
+            DOM.allLayers.forEach(l=>l.classList.remove('highlight'));
+            const el = document.getElementById('phyR');
+            if(el) el.classList.add('highlight');
+            DOM.packet.style.left = endPos.left;
+            DOM.packet.style.top = endPos.top;
+        }, 850); // Second half of animation
+    }, 50);
+  }
+  
+  function updateBtnState(){
+    const isFinished = state.currentStep >= sequence.length;
+    DOM.autoBtn.disabled = state.isRunning;
+    DOM.stepBtn.disabled = state.mode === 'auto' || (state.isRunning && isFinished);
+    DOM.resetBtn.disabled = !state.isRunning && !isFinished;
+    DOM.stepBtn.textContent = (state.isRunning && state.mode === 'step' && !isFinished) ? '➡️ Next Step' : '⏯️ Step-by-Step';
+  }
+  
+  function getLayerPosition(layerId){
+    const simAreaRect = DOM.simArea.getBoundingClientRect();
+    const el = document.getElementById(layerId);
+
+    if(!el) { // Initial position for 'appS' or reset
+        const appSEl = document.getElementById('appS');
+        const appSRect = appSEl.getBoundingClientRect();
+        const top = (appSRect.top - simAreaRect.top) + (appSRect.height / 2) - (DOM.packet.offsetHeight / 2);
+        return {left: '25%', top: `${top}px`};
+    }
+    
+    let targetLeft = '50%';
+    if(el.closest('#sender')) targetLeft = '25%';
+    if(el.closest('#receiver')) targetLeft = '75%';
+
+    const elRect = el.getBoundingClientRect();
+    const top = (elRect.top - simAreaRect.top) + (elRect.height / 2) - (DOM.packet.offsetHeight / 2);
+    
+    return {left: targetLeft, top: `${top}px`};
+  }
+
+  // --- Modal Functions ---
+  function showInfoModal() {
+    DOM.modal.style.display = 'block';
+    updateModalContent(); 
+  }
+  function hideInfoModal() {
+    DOM.modal.style.display = 'none';
+  }
+  function updateModalContent() {
+    const layerKey = DOM.layerSelect.value;
+    const sideKey = DOM.sideSelect.value;
+    DOM.layerInfoDisplay.innerHTML = encyclopedicLayerInfo[layerKey][sideKey];
+  }
+
+  // --- Event Listeners ---
+  DOM.autoBtn.addEventListener('click', () => startSim('auto'));
+  DOM.stepBtn.addEventListener('click', () => { 
+    if(!state.isRunning) startSim('step'); 
+    else nextStep(); 
+  });
+  DOM.resetBtn.addEventListener('click', resetSim);
+  DOM.infoBtn.addEventListener('click', showInfoModal);
+  DOM.closeModalBtn.addEventListener('click', hideInfoModal);
+  DOM.showInfoBtn.addEventListener('click', updateModalContent);
+  window.addEventListener('click', (event) => {
+    if (event.target == DOM.modal) hideInfoModal();
+  });
+  window.addEventListener('keydown', (event) => {
+    if(event.code === 'Space' && !DOM.stepBtn.disabled) {
+        event.preventDefault();
+        DOM.stepBtn.click();
+    }
+    if(event.code === 'KeyR' && !DOM.resetBtn.disabled) {
+        event.preventDefault();
+        DOM.resetBtn.click();
+    }
+  });
+  
+  resetSim();
+});
+</script>
+</body>
+</html>
